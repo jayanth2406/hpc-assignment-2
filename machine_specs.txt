@@ -1,0 +1,16 @@
+Verified remote compute-host inventory (preflight, 2026-10-08)
+
+Question allocation:
+- Q1: Device 1, inhydmupc0899-l
+- Q3: Device 2, inhydmupc0778-l
+- Q2 then Q4 serially: Device 3, inhydmupc0806-l
+
+All three hosts reported:
+- CPU: Intel Core i7-12700, 12 cores / 20 logical CPUs
+- Memory: 15.3 GiB RAM
+- OS: Ubuntu (release not captured)
+- Java/Javac: OpenJDK 1.8.0_352
+- GNUplot: 5.4
+
+Device 3 also reported Python 3.10.12 and LibreOffice installed. These values were read from the remote hosts during preflight; absolute throughput comparisons are not needed across machines, and each speedup baseline is within the same host, implementation, N, and workload.
+

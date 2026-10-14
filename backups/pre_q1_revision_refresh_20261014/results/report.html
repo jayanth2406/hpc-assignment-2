@@ -1,0 +1,137 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+@page { size: A4; margin: 16mm 17mm; }
+body { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.35; color: #20242a; }
+h1 { font-size: 23pt; color: #17324d; margin-bottom: 4pt; }
+h2 { font-size: 18pt; color: #17324d; border-bottom: 1px solid #9ab0c3; padding-bottom: 4pt; }
+h3 { font-size: 13pt; margin-bottom: 4pt; color: #254d70; }
+p, li { margin-top: 4pt; margin-bottom: 5pt; }
+table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 7pt 0 12pt; }
+th, td { border: 1px solid #aeb8c2; padding: 4pt 5pt; text-align: right; }
+th { background: #eaf0f5; color: #17324d; }
+th:first-child, td:first-child { text-align: left; }
+small { font-size: 9pt; color: #4d5965; }
+.cover { min-height: 235mm; display: flex; flex-direction: column; justify-content: center; }
+.question { page-break-before: always; }
+.figures { display: flex; gap: 7mm; align-items: flex-start; }
+.figure { width: 50%; }
+.figure img { width: 100%; height: auto; }
+.caption { font-size: 9pt; color: #4d5965; }
+.note { background: #f1f5f8; padding: 7pt 9pt; border-left: 3px solid #477da8; }
+</style></head><body>
+<section class="cover"><h1>Concurrent Data Structures in Java</h1>
+<p><b>HPC Programming Assignment 2</b></p>
+<p>Performance and scalability report</p>
+<p>Experiment date: 2026-10-08</p>
+<p>We compared the two implementations for each structure using concurrent workloads on the IT Lab systems. Each speedup uses the one-thread result for the same implementation, problem size, and workload.</p>
+<h2>Results at a glance</h2><table><tr><th>Problem</th><th>Highest observed speedup</th><th>Configuration</th></tr>
+<tr><td>Q1: Concurrent doubly linked list</td><td>12.97x</td><td>lockfree, N=1000, 100C-0I-0D, 16 threads</td></tr>
+<tr><td>Q2: Concurrent stack</td><td>10.89x</td><td>treiber, N=1000, 100C-0I-0D, 16 threads</td></tr>
+<tr><td>Q3: Concurrent queue</td><td>10.61x</td><td>ms, N=1000, 100C-0I-0D, 16 threads</td></tr>
+<tr><td>Q4: Elimination-backoff stack</td><td>10.99x</td><td>elimination, N=1000, 100C-0I-0D, 16 threads</td></tr>
+</table><p class="note">Each value is the largest measured speedup for that problem, not a general scaling claim. Workload and problem size matter; the sections below show cases that scale less well.</p>
+<p><small>Machines: three identical Intel Core i7-12700 systems, 12 cores / 20 logical CPUs, 15.3 GiB RAM, Ubuntu, OpenJDK 1.8.0_352.</small></p></section>
+<section class="question"><h2>Method and implementation notes</h2>
+<h3>Experimental protocol</h3>
+<ul>
+<li>Problem sizes: N = 1,000 and 10,000, with 50% prefilled before each run.</li>
+<li>Workloads: 0C-50I-50D, 50C-25I-25D, and 100C-0I-0D.</li>
+<li>Thread counts: 1, 2, 4, 6, 8, 10, 12, 14, and 16; five repetitions per configuration.</li>
+<li>Workers use a shared 10-second deadline based on System.nanoTime(). Prefill, trace generation, worker creation, and CSV output are outside the workload. Elapsed time is recorded through worker completion; six Q3 runs exceeded 10.05 seconds, with a maximum of 10.668 seconds. Those measured durations were retained in the calculations.</li>
+<li>Throughput is completed operation calls divided by the measured elapsed seconds, in millions of operations per second (MOPS). Speedup is the ratio of average throughput at P threads to the matching one-thread average.</li>
+</ul>
+<h3>Algorithms and linearization points</h3>
+<ul>
+<li><b>Q1 list:</b> the lazy list inserts at the protected predecessor-link update and deletes at the logical mark; unsuccessful insert/delete and contains linearize at the decision made in the validated, locked window. The non-blocking version publishes immutable doubly linked snapshots with one state CAS; successful updates linearize at that CAS, while unsuccessful updates and contains linearize at the observed snapshot read. It has no transient mark/help/unlink phase: delete omits the key from a new version and atomically publishes that version. In-flight readers may finish on an older immutable version. Copy-on-write updates are O(N), a deliberate correctness-first tradeoff rather than the Sundell-Tsigas linked-node algorithm.</li>
+<li><b>Q2 stack:</b> lock-based push/pop linearize at the protected top mutation, with empty-pop and peek at the protected top observation. Treiber push/pop linearize at a successful top CAS; empty-pop and peek linearize at the atomic top observation.</li>
+<li><b>Q3 queue:</b> lock-based enqueue/dequeue linearize at the protected link/head update, with empty-dequeue and peek at the protected head observation. Michael-Scott enqueue linearizes at the successful tail.next CAS and successful dequeue at the head CAS; empty-dequeue and peek linearize at the validated head/next observation.</li>
+<li><b>Q4 elimination stack:</b> operations that use the central stack linearize at the Treiber top CAS (or the top observation for empty-pop/peek). A matched push/pop pair linearizes at the successful WAITING-to-MATCHED CAS on its shared elimination offer.</li>
+</ul>
+<p>Every run completed and passed its post-run structure check. A separate test covered empty and populated structures, duplicate and near-sentinel list keys, concurrent list membership, stack value preservation, per-producer queue order, elimination-stack value exchange, and mixed-operation stress. This is not a formal linearizability proof, and the tests did not insert the exact list sentinel values (Integer.MIN_VALUE and Integer.MAX_VALUE); callers should avoid those values. CAS retries were not counted, so contention is discussed qualitatively.</p>
+<p>The raw CSV host field is "unknown" because the Java processes did not receive a HOSTNAME value. Question-to-host assignments are recorded in the machine inventory and averaged results.</p></section>
+<section class="question"><h2>Q1: Concurrent doubly linked list</h2>
+<p>Throughput and speedup are shown for both implementations, all three workload mixes, and both problem sizes. The speedup plots include the ideal linear reference.</p>
+<div class="figures"><div class="figure"><img src="plots/Q1_throughput.png"><p class="caption">Average throughput (MOPS).</p></div>
+<div class="figure"><img src="plots/Q1_speedup.png"><p class="caption">Throughput speedup versus one thread.</p></div></div>
+<h3>Representative mixed-workload results, N = 10,000</h3>
+<table><tr><th>Implementation</th><th>Threads</th><th>Avg throughput (MOPS)</th><th>Speedup</th></tr>
+<tr><td>lazy</td><td>1</td><td>0.1864</td><td>1.000x</td></tr>
+<tr><td>lazy</td><td>4</td><td>0.6386</td><td>3.427x</td></tr>
+<tr><td>lazy</td><td>8</td><td>1.0353</td><td>5.556x</td></tr>
+<tr><td>lazy</td><td>16</td><td>1.5142</td><td>8.125x</td></tr>
+<tr><td>lockfree</td><td>1</td><td>0.1813</td><td>1.000x</td></tr>
+<tr><td>lockfree</td><td>4</td><td>0.3057</td><td>1.686x</td></tr>
+<tr><td>lockfree</td><td>8</td><td>0.0812</td><td>0.448x</td></tr>
+<tr><td>lockfree</td><td>16</td><td>0.0648</td><td>0.358x</td></tr>
+</table>
+<p><b>lazy:</b> peak average throughput 6.6920 MOPS at N=1000, 0C-50I-50D, 16 threads.</p>
+<p>At 16 threads, <b>lazy</b> averaged 5.84x speedup across the six size/workload settings (range 1.65x to 9.80x); 0 of six settings were below its one-thread throughput.</p>
+<p><b>lockfree:</b> peak average throughput 26.1707 MOPS at N=1000, 100C-0I-0D, 16 threads.</p>
+<p>At 16 threads, <b>lockfree</b> averaged 4.42x speedup across the six size/workload settings (range 0.09x to 12.97x); 4 of six settings were below its one-thread throughput.</p>
+<p class="note">The lazy list scales across all six size/workload settings at 16 threads. The snapshot list&#x27;s strongest result is read-only; its copy-on-write updates become expensive as the list grows, and four of the six 16-thread cases fall below their one-thread baselines.</p></section>
+<section class="question"><h2>Q2: Concurrent stack</h2>
+<p>Throughput and speedup are shown for both implementations, all three workload mixes, and both problem sizes. The speedup plots include the ideal linear reference.</p>
+<div class="figures"><div class="figure"><img src="plots/Q2_throughput.png"><p class="caption">Average throughput (MOPS).</p></div>
+<div class="figure"><img src="plots/Q2_speedup.png"><p class="caption">Throughput speedup versus one thread.</p></div></div>
+<h3>Representative mixed-workload results, N = 10,000</h3>
+<table><tr><th>Implementation</th><th>Threads</th><th>Avg throughput (MOPS)</th><th>Speedup</th></tr>
+<tr><td>lock</td><td>1</td><td>34.4541</td><td>1.000x</td></tr>
+<tr><td>lock</td><td>4</td><td>17.2911</td><td>0.502x</td></tr>
+<tr><td>lock</td><td>8</td><td>16.2834</td><td>0.473x</td></tr>
+<tr><td>lock</td><td>16</td><td>14.2436</td><td>0.413x</td></tr>
+<tr><td>treiber</td><td>1</td><td>51.6454</td><td>1.000x</td></tr>
+<tr><td>treiber</td><td>4</td><td>14.8700</td><td>0.288x</td></tr>
+<tr><td>treiber</td><td>8</td><td>11.4170</td><td>0.221x</td></tr>
+<tr><td>treiber</td><td>16</td><td>10.1469</td><td>0.196x</td></tr>
+</table>
+<p><b>lock:</b> peak average throughput 36.4349 MOPS at N=10000, 100C-0I-0D, 1 threads.</p>
+<p>At 16 threads, <b>lock</b> averaged 0.44x speedup across the six size/workload settings (range 0.41x to 0.48x); 6 of six settings were below its one-thread throughput.</p>
+<p><b>treiber:</b> peak average throughput 670.0176 MOPS at N=1000, 100C-0I-0D, 16 threads.</p>
+<p>At 16 threads, <b>treiber</b> averaged 3.73x speedup across the six size/workload settings (range 0.12x to 10.89x); 4 of six settings were below its one-thread throughput.</p>
+<p class="note">The lock-based stack is below its one-thread baseline in all six settings at 16 threads. Treiber performs much better for read-only peek workloads, but its shared top reference remains a contention point for push/pop workloads.</p></section>
+<section class="question"><h2>Q3: Concurrent queue</h2>
+<p>Throughput and speedup are shown for both implementations, all three workload mixes, and both problem sizes. The speedup plots include the ideal linear reference.</p>
+<div class="figures"><div class="figure"><img src="plots/Q3_throughput.png"><p class="caption">Average throughput (MOPS).</p></div>
+<div class="figure"><img src="plots/Q3_speedup.png"><p class="caption">Throughput speedup versus one thread.</p></div></div>
+<h3>Representative mixed-workload results, N = 10,000</h3>
+<table><tr><th>Implementation</th><th>Threads</th><th>Avg throughput (MOPS)</th><th>Speedup</th></tr>
+<tr><td>lock</td><td>1</td><td>33.0329</td><td>1.000x</td></tr>
+<tr><td>lock</td><td>4</td><td>17.6473</td><td>0.534x</td></tr>
+<tr><td>lock</td><td>8</td><td>15.6786</td><td>0.475x</td></tr>
+<tr><td>lock</td><td>16</td><td>13.8852</td><td>0.420x</td></tr>
+<tr><td>ms</td><td>1</td><td>44.1774</td><td>1.000x</td></tr>
+<tr><td>ms</td><td>4</td><td>21.5074</td><td>0.487x</td></tr>
+<tr><td>ms</td><td>8</td><td>12.9704</td><td>0.294x</td></tr>
+<tr><td>ms</td><td>16</td><td>9.9005</td><td>0.224x</td></tr>
+</table>
+<p><b>lock:</b> peak average throughput 38.0589 MOPS at N=1000, 100C-0I-0D, 1 threads.</p>
+<p>At 16 threads, <b>lock</b> averaged 0.43x speedup across the six size/workload settings (range 0.39x to 0.47x); 6 of six settings were below its one-thread throughput.</p>
+<p><b>ms:</b> peak average throughput 558.9839 MOPS at N=1000, 100C-0I-0D, 16 threads.</p>
+<p>At 16 threads, <b>ms</b> averaged 3.65x speedup across the six size/workload settings (range 0.12x to 10.61x); 4 of six settings were below its one-thread throughput.</p>
+<p class="note">The lock-based queue is below its one-thread baseline in all six settings at 16 threads. Michael-Scott scales strongly for read-only peek workloads, while mixed workloads contend on shared queue state. The longer Q3 runs are included rather than discarded.</p></section>
+<section class="question"><h2>Q4: Elimination-backoff stack</h2>
+<p>Throughput and speedup are shown for both implementations, all three workload mixes, and both problem sizes. The speedup plots include the ideal linear reference.</p>
+<div class="figures"><div class="figure"><img src="plots/Q4_throughput.png"><p class="caption">Average throughput (MOPS).</p></div>
+<div class="figure"><img src="plots/Q4_speedup.png"><p class="caption">Throughput speedup versus one thread.</p></div></div>
+<h3>Representative mixed-workload results, N = 10,000</h3>
+<table><tr><th>Implementation</th><th>Threads</th><th>Avg throughput (MOPS)</th><th>Speedup</th></tr>
+<tr><td>treiber</td><td>1</td><td>51.9210</td><td>1.000x</td></tr>
+<tr><td>treiber</td><td>4</td><td>14.7875</td><td>0.285x</td></tr>
+<tr><td>treiber</td><td>8</td><td>11.5372</td><td>0.222x</td></tr>
+<tr><td>treiber</td><td>16</td><td>10.3990</td><td>0.200x</td></tr>
+<tr><td>elimination</td><td>1</td><td>46.9748</td><td>1.000x</td></tr>
+<tr><td>elimination</td><td>4</td><td>5.5206</td><td>0.118x</td></tr>
+<tr><td>elimination</td><td>8</td><td>12.9512</td><td>0.276x</td></tr>
+<tr><td>elimination</td><td>16</td><td>18.9109</td><td>0.403x</td></tr>
+</table>
+<p><b>treiber:</b> peak average throughput 672.8907 MOPS at N=10000, 100C-0I-0D, 16 threads.</p>
+<p>At 16 threads, <b>treiber</b> averaged 3.73x speedup across the six size/workload settings (range 0.12x to 10.90x); 4 of six settings were below its one-thread throughput.</p>
+<p><b>elimination:</b> peak average throughput 621.3997 MOPS at N=1000, 100C-0I-0D, 16 threads.</p>
+<p>At 16 threads, <b>elimination</b> averaged 3.87x speedup across the six size/workload settings (range 0.23x to 10.99x); 4 of six settings were below its one-thread throughput.</p>
+<p>At 16 threads, elimination outperformed Treiber in 4 of six matched configurations; the throughput ratio ranged from 0.92x to 1.86x, so its benefit was workload-dependent.</p>
+<p class="note">At 16 threads, elimination beats Treiber in four of six matched cases, with ratios from 0.92x to 1.86x. This is a workload-dependent gain, not a consistent win; peek operations still use the central stack.</p></section>
+<section class="question"><h2>Interpretation and limitations</h2>
+<p>Compare each curve within its host and matching implementation, size, and workload. Read-heavy structures may scale differently from update-heavy structures: lock-based paths serialize on shared locks, while non-blocking paths can experience failed CAS retries and cache-coherence traffic on hot references. More threads can improve aggregate throughput, saturate, or regress depending on the critical path and scheduling overhead.</p>
+<p>The Q1 snapshot design trades update cost for immutable versions and a single CAS publication. The lock-based stack and queue serialize updates, while Treiber and Michael-Scott avoid a global lock but still contend on shared atomic references. The measurements reflect these tradeoffs for the tested workloads; they should not be generalized beyond this setup.</p>
+<p>Raw operation counts, elapsed times, and run flags are included in the CSV files. Averages and speedups were calculated from those rows. The three machines reported the same CPU model, but each question's speedup is based only on runs from its assigned host.</p>
+<p>The accompanying files include Java sources, correctness tests, launch and analysis scripts, GNUplot charts, raw data, averages, validation records, the machine inventory, and this report. Compiled class files are not included.</p></section></body></html>

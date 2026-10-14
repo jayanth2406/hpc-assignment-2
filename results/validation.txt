@@ -1,0 +1,7 @@
+HPC Assignment 2 benchmark validation: PASS
+Raw data: 4 questions, 540 runs each, 2160 total runs.
+Each required implementation/size/workload/thread configuration has repetitions 1-5.
+Elapsed time, operation counts, throughput formula, and verified flags passed checks.
+Averages are arithmetic means of the five per-run throughput measurements.
+Speedup = average throughput at P threads / corresponding one-thread average.
+Average rows: 432.

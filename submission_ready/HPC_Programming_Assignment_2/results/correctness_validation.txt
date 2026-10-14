@@ -1,0 +1,17 @@
+Supplemental correctness validation
+
+Original enhanced stress and invariant suite (2026-10-09):
+  Device 1: inhydmupc0899-l - PASS, exit code 0
+  Device 2: inhydmupc0778-l - PASS, exit code 0
+  Device 3: inhydmupc0806-l - PASS, exit code 0
+  Test source SHA-256: 4442a108572fdfba35da5bb55b16ba2db5e01ab5148293ca819112d82ebb79c
+
+Q1 full-int-range revision (2026-10-13):
+  Device 1: inhydmupc0899-l - PASS, exit code 0
+  Updated list sentinels use long values outside the int domain. CorrectnessTest.java
+  verifies insertion, lookup, and deletion of Integer.MIN_VALUE and Integer.MAX_VALUE
+  in both list implementations, in addition to the existing stress and invariant checks.
+  Updated Structures.java SHA-256: ec62248541d4fa83d8ea6c898574c3a295521d2b124be5b055e82dc50d3d35a7
+  Updated CorrectnessTest.java SHA-256: 06945152f46afd8961593ee9774789b789de12b5bd101e6d0bbecba523db5fd7
+
+These are stress and invariant checks, not a formal linearizability-history proof.
